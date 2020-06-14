@@ -1,7 +1,7 @@
 #!/bin/bash
 #export DOCKER_HOST=$(ip -4 addr show docker0 | grep -Po 'inet \K[\d.]+')
 
-export DOCKER_HOST="host.docker.internal"
+export DOCKER_HOST="host.docker.internal" 
 export SRV_DOT_ENV="true"
 ping -q -c1 $DOCKER_HOST > /dev/null 2>&1
 if [ $? -ne 0 ]; then

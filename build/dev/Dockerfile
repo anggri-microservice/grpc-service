@@ -1,7 +1,7 @@
 FROM golang:1.13-alpine
 ARG SRV_UID=1000
 ARG SRV_GID=1000
-ENV SERVICE_NAME golang-service
+ENV SERVICE_NAME grpc-service
 
 RUN apk add --no-cache sudo git openssh-client make postgresql-client curl tzdata
 
