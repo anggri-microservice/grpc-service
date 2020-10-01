@@ -1,7 +1,10 @@
 #!/bin/bash
 #export DOCKER_HOST=$(ip -4 addr show docker0 | grep -Po 'inet \K[\d.]+')
 
-export DOCKER_HOST="host.docker.internal" 
+cp .netrc ~/
+chmod 600 ~/.netrc
+
+export DOCKER_HOST="host.docker.internal"
 export SRV_DOT_ENV="true"
 ping -q -c1 $DOCKER_HOST > /dev/null 2>&1
 if [ $? -ne 0 ]; then
@@ -11,6 +14,12 @@ fi
 
 sudo chown -R anggri:anggri /go/pkg
 sudo chown -R anggri:anggri ./vendor
+
+if [ "${COMPOSE_PROJECT_NAME}" = "emporia" ]; then
+    make go-mod-replace-clear
+    make go-mod-replace-insert
+fi
+
 echo "SRV_DC_ONLINE = $SRV_DC_ONLINE"
 if [ "${SRV_DC_ONLINE}" = "true" ]; then
     echo "Vendoring, please wait..."
@@ -23,3 +32,7 @@ CompileDaemon \
     -pattern="^(\.env.+|\.env)|(.+\.go|.+\.c)$" \
     -build="go build -mod=vendor -o $SERVICE_NAME ./cmd/$SERVICE_NAME/..." \
     -command="./${SERVICE_NAME}"
+
+if [ "${COMPOSE_PROJECT_NAME}" = "emporia" ]; then
+    make go-mod-replace-clear
+fi
