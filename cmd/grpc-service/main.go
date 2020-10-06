@@ -1,7 +1,13 @@
 package main
 
-import "log"
+import "github.com/gofiber/fiber/v2"
 
 func main() {
-	log.Println("HELLO this is golang docker template")
+	app := fiber.New()
+
+	app.Get("/test", func(c *fiber.Ctx) error {
+		return c.SendFile("./view/site/index.html")
+	})
+
+	app.Listen(":5000")
 }

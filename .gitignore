@@ -1,6 +1,7 @@
 .env
+.netrccd
 _dev/
-/golang-service
+/grpc-service
 
 # See http://help.github.com/ignore-files/ for more about ignoring files.
 
