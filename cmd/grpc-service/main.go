@@ -1,17 +1,16 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
-	"time"
+	"os"
+
+	"github.com/anggri-microservice/golang-service/internal/db"
+	"github.com/joho/godotenv"
+	json "github.com/json-iterator/go"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	userauthpb "gitlab.com/emporia-digital/emporia-2.0/user-service/pb/auth"
-	"google.golang.org/grpc"
 
 	// In this example we use the html template engine
 	"github.com/gofiber/template/html"
@@ -23,6 +22,8 @@ type ResponseTemplate struct {
 	Message string
 	Data    interface{}
 }
+
+const grpcServer string = "192.168.1.222:6003"
 
 func main() {
 	// Create a new engine by passing the template folder
@@ -45,11 +46,6 @@ func main() {
 	// Delims sets the action delimiters to the specified strings
 	engine.Delims("{{", "}}") // Optional. Default: engine delimiters
 
-	// AddFunc adds a function to the template's global function map.
-	engine.AddFunc("greet", func(name string) string {
-		return "Hello, " + name + "!"
-	})
-
 	// After you created your engine, you can pass it to Fiber's Views Engine
 	app := fiber.New(fiber.Config{
 		Views: engine,
@@ -58,39 +54,42 @@ func main() {
 	// Cors headers
 	app.Use(cors.New())
 
-	// To render a template, you can call the ctx.Render function
-	// Render(tmpl string, values interface{}, layout ...string)
-	app.Post("/phone-verification", PhoneVerification)
+	// Load go env
+	var err error
+	if os.Getenv("SRV_DOT_ENV") == "true" {
+		err = godotenv.Load()
+		if err != nil {
+			log.Fatal("Error loading .env file")
+		}
+	}
+
+	// Connect db postgres
+	go initServer(app)
 
 	log.Fatal(app.Listen(":5000"))
 }
 
-//PhoneVerification controller function
-func PhoneVerification(c *fiber.Ctx) error {
-	conn, err := grpc.Dial("192.168.1.222:6003", grpc.WithInsecure())
+func initServer(app *fiber.App) {
+	var err error
+	db.DBConn, err = db.PostgreSQL.ConnectSqlx()
+
 	if err != nil {
 		log.Println(err)
 	}
-	defer conn.Close()
 
-	d := userauthpb.NewAuthClient(conn)
-	//add grpc deadline form product wating time
-	msEnv := int(60 * 1000)
-	newGRPCDeadline := time.Duration(msEnv) * time.Millisecond
-	_, cancel := context.WithTimeout(context.Background(), newGRPCDeadline)
-	defer cancel()
+	// To render a template, you can call the ctx.Render function
+	// Render(tmpl string, values interface{}, layout ...string)
+	app.Post("/users", Users)
+}
 
+//Users controller function
+func Users(c *fiber.Ctx) error {
+	//get request to interface
 	var data map[string]interface{}
-	err = json.Unmarshal(c.Body(), &data)
-
-	resAuth, err := d.MitraPhoneVerification(context.Background(), &userauthpb.PhoneVerificationReq{
-		Phone:       data["phone"].(string),
-		Application: data["type"].(string),
-	})
-
+	err := json.Unmarshal(c.Body(), &data)
 	if err != nil {
 		log.Println(err)
-		messageError := strings.ReplaceAll(err.Error(), "rpc error: code = Unknown desc = ", "")
+		messageError := err.Error()
 		errTemplate := &ResponseTemplate{
 			Status:  fiber.StatusBadRequest,
 			Message: messageError,
@@ -100,12 +99,47 @@ func PhoneVerification(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(errTemplate)
 	}
 
-	var response map[string]interface{}
-	err = json.Unmarshal(resAuth.Data, &response)
+	SQL := `select id, name from users`
+	type Users struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
+	}
+
+	var users []Users
+	err = db.DBConn.Select(&users, SQL)
+	if err != nil {
+		log.Println(err)
+		messageError := err.Error()
+		errTemplate := &ResponseTemplate{
+			Status:  fiber.StatusBadRequest,
+			Message: messageError,
+			Data:    nil,
+		}
+
+		return c.Status(fiber.StatusBadRequest).JSON(errTemplate)
+	}
+
+	log.Println(users)
+
+	// var response map[string]interface{}
+	// err = json.Unmarshal([]byte(`{"test":"haha"}`), &response)
+	// log.Println(response)
+	// if err != nil {
+	// 	log.Println(err)
+	// 	messageError := err.Error()
+	// 	errTemplate := &ResponseTemplate{
+	// 		Status:  fiber.StatusBadRequest,
+	// 		Message: messageError,
+	// 		Data:    nil,
+	// 	}
+
+	// 	return c.Status(fiber.StatusBadRequest).JSON(errTemplate)
+	// }
+
 	successTemplate := &ResponseTemplate{
 		Status:  fiber.StatusOK,
 		Message: "Sukses menampilkan data verifikasi",
-		Data:    response,
+		// Data:    response,
 	}
 	return c.JSON(successTemplate)
 }
